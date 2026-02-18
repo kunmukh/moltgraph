@@ -163,10 +163,26 @@ def main():
                 continue
 
     # 4) Update agent profiles for newly observed agents
-    for name in sorted(seen_agents):
+    # Update agent profiles:
+    #  (A) Always profile-refresh agents we just discovered this week
+    #  (B) Also refresh any stale profiles already in DB
+    stale_limit = int(os.getenv("PROFILE_REFRESH_LIMIT", "500"))
+    stale_days  = int(os.getenv("PROFILE_REFRESH_DAYS", "7"))
+
+    names_to_refresh = set(seen_agents)
+
+    # refresh stale agents from DB
+    try:
+        stale = store.get_agents_needing_profile_refresh(days=stale_days, limit=stale_limit)
+        names_to_refresh.update(stale)
+    except Exception:
+        pass
+
+    for name in sorted(names_to_refresh):
         try:
             prof = client.get_agent_profile(name)
-            store.upsert_agents([prof.get("agent", {}) or {}], observed_at)
+            agent_obj = prof.get("agent", {}) or {}
+            store.upsert_agents([agent_obj], observed_at, mark_profile=True)
         except Exception:
             continue
 

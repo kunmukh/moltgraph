@@ -1,7 +1,8 @@
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-
+from typing import List
+    
 from neo4j import GraphDatabase
 
 def now_iso() -> str:
@@ -88,12 +89,34 @@ class Neo4jStore:
                 return None
             return r["cutoff"].to_native().isoformat()
 
+    def get_agents_needing_profile_refresh(self, days: int = 7, limit: int = 500) -> List[str]:
+        """
+        Returns agent names whose profile is missing or stale.
+        Uses Agent.profile_last_fetched_at (set only when mark_profile=True in upsert_agents).
+        """
+        q = """
+        MATCH (a:Agent)
+        WHERE a.name IS NOT NULL
+        AND (
+            a.profile_last_fetched_at IS NULL OR
+            a.profile_last_fetched_at < datetime() - duration({days: $days})
+        )
+        RETURN a.name AS name
+        ORDER BY coalesce(a.profile_last_fetched_at, datetime("1970-01-01T00:00:00Z")) ASC
+        LIMIT $limit
+        """
+        with self.driver.session() as s:
+            res = s.run(q, days=int(days), limit=int(limit))
+            return [r["name"] for r in res if r and r.get("name")]
+
+
     # ---- Upserts ----
-    def upsert_agents(self, agents: List[Dict[str, Any]], observed_at_iso: str):
+    def upsert_agents(self, agents: List[Dict[str, Any]], observed_at_iso: str, mark_profile: bool = False):
         q = """
         UNWIND $rows AS row
         MERGE (a:Agent {name: row.name})
-        ON CREATE SET a.first_seen_at = datetime($obs), a.created_at = datetime(coalesce(row.created_at, $obs))
+        ON CREATE SET a.first_seen_at = datetime($obs),
+                    a.created_at = datetime(coalesce(row.created_at, $obs))
         SET a.last_seen_at = datetime($obs),
             a.display_name = coalesce(row.display_name, a.display_name),
             a.description = coalesce(row.description, a.description),
@@ -108,8 +131,13 @@ class Neo4jStore:
             a.owner_twitter_handle = coalesce(row.owner_twitter_handle, a.owner_twitter_handle),
             a.claimed_at = CASE WHEN row.claimed_at IS NULL THEN a.claimed_at ELSE datetime(row.claimed_at) END,
             a.last_active = CASE WHEN row.last_active IS NULL THEN a.last_active ELSE datetime(row.last_active) END,
-            a.updated_at = CASE WHEN row.updated_at IS NULL THEN a.updated_at ELSE datetime(row.updated_at) END
+            a.updated_at = CASE WHEN row.updated_at IS NULL THEN a.updated_at ELSE datetime(row.updated_at) END,
+            a.profile_last_fetched_at = CASE
+                WHEN $mark_profile THEN datetime($obs)
+                ELSE a.profile_last_fetched_at
+            END
         """
+
         # Normalize keys (API mixes camelCase/snake_case)
         def norm(x: Dict[str, Any]) -> Dict[str, Any]:
             return {
@@ -134,7 +162,7 @@ class Neo4jStore:
         rows = [norm(a) for a in agents if a.get("name")]
         with self.driver.session() as s:
             for batch in chunked(rows, 500):
-                s.run(q, rows=batch, obs=observed_at_iso)
+                s.run(q, rows=batch, obs=observed_at_iso, mark_profile=mark_profile)
 
     def upsert_x_owner(self, agent_name: str, handle: str, url: Optional[str], observed_at_iso: str):
         q = """

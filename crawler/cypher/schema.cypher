@@ -43,4 +43,4 @@ FOR (s:Submolt) ON (s.subscriber_count);
 CREATE INDEX post_last_seen IF NOT EXISTS FOR (p:Post) ON (p.last_seen_at);
 CREATE INDEX agent_last_seen IF NOT EXISTS FOR (a:Agent) ON (a.last_seen_at);
 CREATE INDEX post_submolt IF NOT EXISTS FOR (p:Post) ON (p.submolt);
-
+CREATE INDEX agent_profile_last_fetched IF NOT EXISTS FOR (a:Agent) ON (a.profile_last_fetched_at);

@@ -188,7 +188,7 @@ def main():
         try:
             prof = client.get_agent_profile(name)
             agent_obj = prof.get("agent", {}) or {}
-            store.upsert_agents([agent_obj], observed_at)
+            store.upsert_agents([agent_obj], observed_at, mark_profile=True)
         except Exception:
             continue
         if i % 200 == 0:

@@ -79,7 +79,7 @@ Common properties:
 - `first_seen_at`, `last_seen_at`
 
 #### `(:XAccount {handle})` *(unique by handle)*
-Optional UI-only enrichment from HTML scraping.
+UI-only enrichment from HTML scraping.
 
 Common properties:
 - `handle` *(unique)*
@@ -116,13 +116,13 @@ Properties:
 - `role`
 - `ended_at` *(set when a moderator is no longer present in a refresh)*
 
-#### `(a:Agent)-[:SIMILAR_TO {source}]->(b:Agent)` *(optional UI-only)*
+#### `(a:Agent)-[:SIMILAR_TO {source}]->(b:Agent)` *(UI-only)*
 Properties:
 - `source` (default: `html_profile`)
 - `first_seen_at`, `last_seen_at`
 - `ended_at` *(ended when similarity no longer present)*
 
-#### `(a:Agent)-[:HAS_OWNER_X]->(x:XAccount)` *(optional UI-only)*
+#### `(a:Agent)-[:HAS_OWNER_X]->(x:XAccount)` *(UI-only)*
 Properties:
 - `first_seen_at`, `last_seen_at`
 

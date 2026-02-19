@@ -35,7 +35,7 @@ def main():
     if not posts:
         raise RuntimeError("No posts returned from /posts. Check API key/base URL.")
 
-    # 2) Normalize submolt dict -> name for ingestion (since your API returns submolt as object)
+    # 2) Normalize submolt dict -> name for ingestion
     def norm_post(p):
         p = dict(p)
         sub = p.get("submolt")

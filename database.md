@@ -13,7 +13,7 @@ docker compose run --rm crawler python -m scripts.init_db
 Option B: apply schema directly with cypher-shell inside the Neo4j container
 
 ```bash
-# Find the Neo4j container name (example output: moltbook-neo4j)
+# Find the Neo4j container name
 docker ps --format '{{.Names}}' | grep neo4j
 
 # Then apply schema

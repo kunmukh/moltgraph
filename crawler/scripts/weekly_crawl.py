@@ -229,7 +229,7 @@ def main():
             repeat_pages = 0
         prev_sig = sig
 
-        # optional per-post detail fetch
+        # per-post detail fetch
         if fetch_post_details:
             enriched = []
             for p in batch:
@@ -412,7 +412,7 @@ def main():
             except Exception:
                 continue
 
-    # 6) Optional HTML scrape (only for newly seen agents)
+    # 6) HTML scrape (only for newly seen agents)
     if scrape_html and seen_agents:
         from html_scrape import scrape_agent_page
         print(f"[html] scraping {len(seen_agents)} agents")

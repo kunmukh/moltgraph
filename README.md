@@ -172,8 +172,8 @@ LIMIT 5;
 Weekly crawl:
 - Refreshes Submolts + Moderators
 - Fetches new posts since `last_cutoff`
-- Updates comments for new posts (optional)
-- Profile-refreshes newly seen agents (and optionally stale agents)
+- Updates comments for new posts
+- Profile-refreshes newly seen agents (and stale agents)
 
 Run:
 
@@ -181,7 +181,7 @@ Run:
 docker compose run --rm crawler python -m scripts.weekly_crawl
 ```
 
-Optional tuning:
+Tuning:
 
 ```bash
 docker compose run --rm \

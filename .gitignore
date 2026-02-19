@@ -1,5 +1,6 @@
+__pycache__/
+**/__pycache__/
 .env
 credentials.json
 **/bot_register_private.md
-__pycache__/
-**/__pycache__/
+**/test.py

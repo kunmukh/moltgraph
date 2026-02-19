@@ -11,6 +11,13 @@ It supports:
 
 ---
 
+## Example Graphs
+
+<img src="images/small.png" alt="Example small graph" width="300" />
+<img src="images/large.png" alt="Example large graph" width="330" />
+
+---
+
 ## Repo Layout
 
 ```

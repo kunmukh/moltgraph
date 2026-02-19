@@ -1,0 +1,64 @@
+services:
+  neo4j:
+    image: neo4j:5
+    container_name: moltbook-neo4j
+    ports:
+      - "7474:7474"   # Browser
+      - "7687:7687"   # Bolt
+    environment:
+      # Install GDS
+      - NEO4J_PLUGINS=["graph-data-science"]
+      # Recommended so GDS procedures work without permission errors
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*
+      - NEO4J_dbms_security_procedures_allowlist=gds.*
+
+      - NEO4J_AUTH=neo4j/please-change-me
+      # Helps when importing large batches
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p please-change-me 'RETURN 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  crawler:
+    build: ./crawler
+    container_name: moltbook_crawler
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      # Required
+      - MOLTBOOK_API_KEY=${MOLTBOOK_API_KEY}
+      - MOLTBOOK_BASE_URL=https://www.moltbook.com/api/v1
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=please-change-me
+
+      # Crawl knobs
+      - FETCH_POST_DETAILS=0        # 1 = also GET /posts/:id for every post (slower, richer)
+      - SCRAPE_AGENT_HTML=0         # 1 = scrape /u/<agent> for Similar Agents + Human Owner X
+      - "USER_AGENT=MoltGraphCrawler/0.1 (research; contact=mkunal@vt.edu)"  # User-Agent header sent on HTTP requests (identify crawler + contact)
+      - CRAWL_COMMENTS=1            # 1 = crawl comments for posts (extra requests + storage); 0 = skip comments
+      - COMMENTS_LIMIT_PER_POST=100000  # Max comments to fetch per post (safety cap; high values can be very slow/heavy)
+      - FETCH_AGENT_PROFILES=1      # 1 = fetch /u/<agent> profile metadata (and related endpoints if implemented); 0 = skip
+      - PROFILE_LIMIT=100000        # Max number of agent profiles to fetch in a run (upper bound to prevent endless crawling)
+      - SUBMOLT_TOP_LIMIT=100000    # Max number of “top” submolts to consider/pull (caps discovery / list size)
+      - MODERATOR_SUBMOLTS_LIMIT=100000  # Max number of submolts to process when refreshing moderators (caps mod-refresh workload)
+      - ENRICH_SUBMOLTS=1           # 1 = run enrichment on discovered submolts (e.g., extra metadata/backfills); 0 = skip enrichment
+      - ENRICH_SUBMOLTS_LIMIT=100000  # Max number of submolts to enrich per run (upper bound to control runtime)
+      # Rate limiting / politeness
+      - REQUESTS_PER_MINUTE=80   # stay below 100/min general limit
+    volumes:
+      - ./crawler:/app
+    command: ["python", "-m", "scripts.weekly_crawl"]
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_plugins:

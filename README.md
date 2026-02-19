@@ -1,6 +1,6 @@
 # MoltGraph: Moltbook Social Network Graph
 
-We provide a Neo4j crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in **Neo4j**. Read the graph schema [here](graph-schema.md). Read the database specific example queries [here](database.md).
+We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in Neo4j. Read the graph schema [here](graph-schema.md). Read the database specific example queries [here](database.md).
 
 It supports:
 - **Smoke test** (≈30s) to validate the pipeline ensuring the API + Neo4j writes end-to-end  
@@ -209,7 +209,7 @@ If you use this crawler in academic work, please cite it.
 ```bibtex
 @software{mukherjee_moltbook_neo4j_crawler_2026,
   author       = {Mukherjee, Kunal},
-  title        = {Moltbook → Neo4j Graph Crawler},
+  title        = {MoltGraph: Moltbook Social Network Graph},
   year         = {2026},
   month        = {2},
   version      = {0.1},

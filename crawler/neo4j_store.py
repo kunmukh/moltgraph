@@ -415,19 +415,43 @@ class Neo4jStore:
 
     def upsert_moderators_for_submolt(self, submolt_name: str, moderators: List[Dict[str, Any]], observed_at_iso: str):
         # Best-effort normalization (the API returns {moderators:[...]} but exact keys can evolve)
-        current_names = []
-        rows = []
-        for m in moderators:
-            name = m.get("name") or m.get("agent_name") or m.get("agent")
-            if not name:
+        # IMPORTANT: Some endpoints return wrapper objects like {"role": "...", "agent": {<full agent dict>}}
+        # In that case, m["agent"] is a dict, and we MUST extract agent["name"] (Neo4j properties can't store maps).
+        current_names: List[str] = []
+        rows: List[Dict[str, Any]] = []
+
+        for m in moderators or []:
+            if not isinstance(m, dict):
                 continue
+
+            role = m.get("role", "moderator")
+
+            # Common shapes:
+            #  (A) {"name": "Alice", "role": "..."}
+            #  (B) {"agent_name": "Alice", "role": "..."}
+            #  (C) {"agent": "Alice", "role": "..."}
+            #  (D) {"agent": {"name": "Alice", "displayName": "...", ...}, "role": "..."}
+            agent_field = m.get("agent")
+
+            name = m.get("name") or m.get("agent_name")
+            display_name = m.get("display_name") or m.get("displayName")
+
+            if not name:
+                if isinstance(agent_field, str):
+                    name = agent_field
+                elif isinstance(agent_field, dict):
+                    name = agent_field.get("name") or agent_field.get("agent_name")
+                    display_name = display_name or agent_field.get("displayName") or agent_field.get("display_name")
+
+            if not isinstance(name, str) or not name:
+                continue
+
             current_names.append(name)
             rows.append({
                 "name": name,
-                "display_name": m.get("display_name") or m.get("displayName"),
-                "role": m.get("role", "moderator"),
+                "display_name": display_name,
+                "role": role,
             })
-
         q_end_missing = """
         MATCH (s:Submolt {name:$submolt})
         OPTIONAL MATCH (a:Agent)-[r:MODERATES]->(s)

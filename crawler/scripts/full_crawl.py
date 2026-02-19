@@ -178,7 +178,7 @@ def main():
     comments_limit_per_post = int(os.getenv("COMMENTS_LIMIT_PER_POST", "200"))
 
     # /submolts offset is currently ignored in production in many cases; treat as "top slice" only.
-    submolt_top_limit = int(os.getenv("SUBMOLT_TOP_LIMIT", "100"))
+    submolt_top_limit = int(os.getenv("SUBMOLT_TOP_LIMIT", "100000"))
     moderators_limit = int(os.getenv("MODERATOR_SUBMOLTS_LIMIT", "500"))
 
     enrich_submolts = os.getenv("ENRICH_SUBMOLTS", "0") == "1"
@@ -435,9 +435,30 @@ def main():
 
                 if isinstance(mods, list) and mods:
                     store.upsert_moderators_for_submolt(name, mods, observed_at)
-                    store.upsert_agents(mods, observed_at)
+                    # Moderator payloads can be wrapper objects like {"role": "...", "agent": {<profile>}}.
+                    # Extract agent dicts / names so upserts don't silently drop them.
+                    mod_agents: List[Dict[str, Any]] = []
+                    for mm in mods:
+                        if not isinstance(mm, dict):
+                            continue
+                        af = mm.get("agent")
+                        if isinstance(af, dict):
+                            mod_agents.append(af)
+                        elif isinstance(af, str) and af:
+                            mod_agents.append({"name": af})
+                        elif isinstance(mm.get("name"), str) and mm.get("name"):
+                            mod_agents.append(mm)
+                        elif isinstance(mm.get("agent_name"), str) and mm.get("agent_name"):
+                            mod_agents.append({"name": mm.get("agent_name")})
+                    upsert_agents_profile_aware(store, mod_agents, observed_at)
                     for m in mods:
-                        nm = m.get("name") or m.get("agent_name") or m.get("agent")
+                        nm = m.get("name") or m.get("agent_name")
+                        if not nm:
+                            af = m.get("agent")
+                            if isinstance(af, str):
+                                nm = af
+                            elif isinstance(af, dict):
+                                nm = af.get("name")
                         if isinstance(nm, str) and nm:
                             seen_agents.add(nm)
             except Exception:

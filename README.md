@@ -129,10 +129,21 @@ A full crawl ingests “everything discoverable” up to the crawl cutoff (UTC n
 
 ```bash
 docker compose run --rm \
-  -e REQUESTS_PER_MINUTE=60 \
-  -e ENRICH_SUBMOLTS=0 \
+  -e USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+  -e DEBUG_HTTP=1 \
+  -e REQUESTS_PER_MINUTE=60  \
   -e CRAWL_COMMENTS=1 \
+  -e COMMENTS_LIMIT_PER_POST=1000 \
+  -e FETCH_AGENT_PROFILES=1  \
+  -e PROFILE_LIMIT=100000 \
+  -e FETCH_POST_DETAILS=1 \
+  -e SCRAPE_AGENT_HTML=0  \
+  -e SUBMOLT_TOP_LIMIT=100000 \
+  -e MODERATOR_SUBMOLTS_LIMIT=100000 \
+  -e ENRICH_SUBMOLTS=1 \
+  -e ENRICH_SUBMOLTS_LIMIT=100000 \
   crawler python -m scripts.full_crawl
+
 ```
 
 ### Faster first full crawl (no comments)

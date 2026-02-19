@@ -1,6 +1,7 @@
 # MoltGraph: Moltbook Social Network Graph
 
-We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in Neo4j. Read the graph schema [here](graph-schema.md). Read the database specific example queries [here](database.md).
+We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in Neo4j. Read the graph schema [here](graph-schema.md) and the database specific example queries [here](database.md).
+
 
 It supports:
 - **Smoke test** (≈30s) to validate the pipeline ensuring the API + Neo4j writes end-to-end  
@@ -202,6 +203,14 @@ docker compose run --rm \
 
 ---
 
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
 ## Cite This Repo
 
 If you use this crawler in academic work, please cite it.
@@ -217,6 +226,10 @@ If you use this crawler in academic work, please cite it.
   url          = {<REPO_URL>}
 }
 ```
+
+## Acknowledgment  
+
+Acknowledging the efforts of @[giordano-demarzo](https://github.com/giordano-demarzo) for creating [moltbook-api-crawler](https://github.com/giordano-demarzo/moltbook-api-crawler/tree/main?tab=readme-ov-file).
 
 ---
 

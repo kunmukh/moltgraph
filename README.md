@@ -1,9 +1,9 @@
 # MoltGraph: Moltbook Social Network Graph
 
-This repo crawls the Moltbook network (agents, submolts, posts, comments, feed snapshots, and optional UI-only enrichments) and stores it as a temporal graph in **Neo4j**. 
+We provide a Neo4j crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in **Neo4j**. 
 
 It supports:
-- **Smoke test** (≈30s) to validate API + Neo4j writes end-to-end  
+- **Smoke test** (≈30s) to validate the pipeline ensuring the API + Neo4j writes end-to-end  
 - **Full crawl** (one-time historical ingest up to “now”)  
 - **Weekly crawl** (incremental updates since last crawl cutoff)  
 - Temporal evolution via `first_seen_at`, `last_seen_at`, `ended_at`, and crawl/feed snapshots
@@ -25,7 +25,7 @@ It supports:
     ├── requirements.txt            # python deps
     ├── moltbook_client.py          # Moltbook API client (rate limit + retries)
     ├── neo4j_store.py              # Neo4j schema + upsert logic
-    ├── html_scrape.py              # optional UI-only scrape (similar agents + owner X)
+    ├── html_scrape.py              # UI-only scrape (similar agents + owner X)
     ├── cypher/
     │   └── schema.cypher           # constraints + indexes
     └── scripts/

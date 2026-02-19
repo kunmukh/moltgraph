@@ -36,17 +36,24 @@ services:
     environment:
       # Required
       - MOLTBOOK_API_KEY=${MOLTBOOK_API_KEY}
-      # Optional (defaults shown)
+      # Optional
       - MOLTBOOK_BASE_URL=https://www.moltbook.com/api/v1
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=please-change-me
 
       # Crawl knobs
-      - FETCH_POST_DETAILS=0     # 1 = also GET /posts/:id for every post (slower, richer)
-      - SCRAPE_AGENT_HTML=0      # 1 = scrape /u/<agent> for Similar Agents + Human Owner X
-      - "USER_AGENT=MoltGraphCrawler/0.1 (research; contact=mkunal@vt.edu)"
-
+      - FETCH_POST_DETAILS=0        # 1 = also GET /posts/:id for every post (slower, richer)
+      - SCRAPE_AGENT_HTML=0         # 1 = scrape /u/<agent> for Similar Agents + Human Owner X
+      - "USER_AGENT=MoltGraphCrawler/0.1 (research; contact=mkunal@vt.edu)"  # User-Agent header sent on HTTP requests (identify crawler + contact)
+      - CRAWL_COMMENTS=1            # 1 = crawl comments for posts (extra requests + storage); 0 = skip comments
+      - COMMENTS_LIMIT_PER_POST=100000  # Max comments to fetch per post (safety cap; high values can be very slow/heavy)
+      - FETCH_AGENT_PROFILES=1      # 1 = fetch /u/<agent> profile metadata (and related endpoints if implemented); 0 = skip
+      - PROFILE_LIMIT=100000        # Max number of agent profiles to fetch in a run (upper bound to prevent endless crawling)
+      - SUBMOLT_TOP_LIMIT=100000    # Max number of “top” submolts to consider/pull (caps discovery / list size)
+      - MODERATOR_SUBMOLTS_LIMIT=100000  # Max number of submolts to process when refreshing moderators (caps mod-refresh workload)
+      - ENRICH_SUBMOLTS=1           # 1 = run enrichment on discovered submolts (e.g., extra metadata/backfills); 0 = skip enrichment
+      - ENRICH_SUBMOLTS_LIMIT=100000  # Max number of submolts to enrich per run (upper bound to control runtime)
       # Rate limiting / politeness
       - REQUESTS_PER_MINUTE=80   # stay below 100/min general limit
     volumes:

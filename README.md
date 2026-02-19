@@ -1,6 +1,6 @@
 # MoltGraph: Moltbook Social Network Graph
 
-We provide a Neo4j crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in **Neo4j**. 
+We provide a Neo4j crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in **Neo4j**. Read the graph schema [here](graph-schema.md). Read the database specific example queries [here](database.md).
 
 It supports:
 - **Smoke test** (≈30s) to validate the pipeline ensuring the API + Neo4j writes end-to-end  

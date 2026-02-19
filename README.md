@@ -51,34 +51,11 @@ It supports:
 
 ### 1) Create `.env` (repo root)
 
-Create a `.env` file in the repo root (same directory as `docker-compose.yml`):
+Copy `.env.example` file in the repo root and rename it as `.env` (same directory as `docker-compose.yml`):
 
 ```bash
-# Moltbook
+# Update API Key
 MOLTBOOK_API_KEY=YOUR_KEY_HERE
-MOLTBOOK_BASE_URL=https://www.moltbook.com/api/v1
-
-# Neo4j (inside Docker network)
-NEO4J_URI=bolt://neo4j:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=change_me
-
-# Crawler behavior
-REQUESTS_PER_MINUTE=60
-USER_AGENT=MoltGraphCrawler/0.1
-
-# Optional toggles
-FETCH_POST_DETAILS=0
-SCRAPE_AGENT_HTML=0
-CRAWL_COMMENTS=1
-COMMENTS_LIMIT_PER_POST=500
-
-# Full crawl submolt enrichment (expensive)
-ENRICH_SUBMOLTS=1
-
-# Agent profile refresh controls (weekly)
-PROFILE_REFRESH_DAYS=7
-PROFILE_REFRESH_LIMIT=500
 ```
 
 **Notes**

@@ -167,6 +167,8 @@ def main():
     crawl_comments = os.getenv("CRAWL_COMMENTS", "1") == "1"
     comments_limit_per_post = int(os.getenv("COMMENTS_LIMIT_PER_POST", "500"))
 
+    comments_from_post_details = os.getenv("COMMENTS_FROM_POST_DETAILS", "1") == "1"
+
     # /submolts offset pagination is broken in production -> top slice only
     submolt_top_limit = int(os.getenv("SUBMOLT_TOP_LIMIT", "100"))
     refresh_moderators = os.getenv("REFRESH_MODERATORS", "1") == "1"
@@ -229,7 +231,7 @@ def main():
             repeat_pages = 0
         prev_sig = sig
 
-        # per-post detail fetch
+        # optional per-post detail fetch
         if fetch_post_details:
             enriched = []
             for p in batch:
@@ -328,7 +330,13 @@ def main():
             if not pid:
                 continue
             try:
-                tree = get_comments_any(client, pid, sort="new", limit=comments_limit_per_post)
+                tree = None
+                if fetch_post_details and comments_from_post_details and isinstance(p, dict):
+                    t = p.get("comments")
+                    if isinstance(t, list) and t:
+                        tree = t
+                if not tree:
+                    tree = get_comments_any(client, pid, sort="new", limit=comments_limit_per_post)
                 if tree:
                     store.upsert_comments(pid, tree, observed_at)
                     collect_authors_from_comments(tree, seen_agents)
@@ -412,7 +420,7 @@ def main():
             except Exception:
                 continue
 
-    # 6) HTML scrape (only for newly seen agents)
+    # 6) Optional HTML scrape (only for newly seen agents)
     if scrape_html and seen_agents:
         from html_scrape import scrape_agent_page
         print(f"[html] scraping {len(seen_agents)} agents")

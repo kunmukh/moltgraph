@@ -177,8 +177,12 @@ def main():
     crawl_comments = os.getenv("CRAWL_COMMENTS", "1") == "1"
     comments_limit_per_post = int(os.getenv("COMMENTS_LIMIT_PER_POST", "200"))
 
+    # Prefer full nested comment trees from /posts/:id when we already fetch post details.
+    # This avoids the hard limit on /posts/:id/comments and gets more complete trees.
+    comments_from_post_details = os.getenv("COMMENTS_FROM_POST_DETAILS", "1") == "1"
+
     # /submolts offset is currently ignored in production in many cases; treat as "top slice" only.
-    submolt_top_limit = int(os.getenv("SUBMOLT_TOP_LIMIT", "100000"))
+    submolt_top_limit = int(os.getenv("SUBMOLT_TOP_LIMIT", "100"))
     moderators_limit = int(os.getenv("MODERATOR_SUBMOLTS_LIMIT", "500"))
 
     enrich_submolts = os.getenv("ENRICH_SUBMOLTS", "0") == "1"
@@ -193,7 +197,7 @@ def main():
     max_repeat_pages = int(os.getenv("MAX_REPEAT_PAGES", "2"))  # stop if same signature repeats
     max_pages = int(os.getenv("POSTS_MAX_PAGES", "0"))  # 0 = no cap
 
-    # Additional "views" (sort,time) to widen coverage even if paging is flaky.
+    # Optional additional "views" (sort,time) to widen coverage even if paging is flaky.
     # (Undocumented but used in other crawlers; safe if ignored by API.)
     views_env = os.getenv("POST_VIEWS", "").strip()
     if views_env:
@@ -260,6 +264,8 @@ def main():
     # 3) Crawl posts (public) — multi-view scan + robust stop conditions
     seen_post_ids: Set[str] = set()
     commented_post_ids: Set[str] = set()
+    # In-batch cache: post_id -> nested comment tree from /posts/:id
+    post_comments_cache: Dict[str, List[Dict[str, Any]]] = {}
     seen_agents: Set[str] = set()
     submolts_seen: Dict[str, Dict[str, Any]] = {}
     comments_posts_with_tree = 0
@@ -301,7 +307,7 @@ def main():
                 repeat_pages = 0
             prev_sig = sig
 
-            # Wnrich new posts only
+            # Optional: enrich new posts only
             new_batch: List[Dict[str, Any]] = []
             new_ids = 0
 
@@ -341,6 +347,13 @@ def main():
                         det = public_get_json(client, f"/posts/{pid}", params={"shuffle": int(time.time() * 1000)})
                         post_obj = det.get("post") if isinstance(det, dict) else None
                         new_batch.append(post_obj or p)
+
+                        # Cache full comment tree from post details if present
+                        if crawl_comments and comments_from_post_details and pid not in commented_post_ids:
+                            if isinstance(post_obj, dict):
+                                tree = post_obj.get("comments")
+                                if isinstance(tree, list) and tree:
+                                    post_comments_cache[pid] = tree
                     except Exception:
                         new_batch.append(p)
             else:
@@ -348,23 +361,30 @@ def main():
 
             # Write posts
             store.upsert_posts([norm_post_for_store(p) for p in new_batch], observed_at)
-            written_total += len(batch)
-
-            # Comments: fetch at most once per post ID
+            written_total += len(batch)            # Comments: fetch at most once per post ID
             if crawl_comments:
                 for p in batch:
                     pid = p.get("id")
                     if not pid or pid in commented_post_ids:
                         continue
+
+                    # 1) Prefer cached full tree from /posts/:id (when FETCH_POST_DETAILS=1)
+                    tree = post_comments_cache.pop(pid, None)
+                    if not tree:
+                        # 2) Fallback: /posts/:id/comments (NOTE: server-side hard limit; may be incomplete)
+                        try:
+                            tree = get_comments_any(client, pid, sort="new", limit=comments_limit_per_post)
+                        except Exception:
+                            tree = None
+
                     commented_post_ids.add(pid)
-                    try:
-                        tree = get_comments_any(client, pid, sort="new", limit=comments_limit_per_post)
-                        if tree:
+                    if tree:
+                        try:
                             store.upsert_comments(pid, tree, observed_at)
                             collect_authors_from_comments(tree, seen_agents)
                             comments_posts_with_tree += 1
-                    except Exception:
-                        continue
+                        except Exception:
+                            pass
 
             # offset advance
             old_offset = offset
@@ -418,6 +438,91 @@ def main():
         store.upsert_submolts(discovered_submolts, observed_at)
         print(f"[submolts] upserted discovered from posts: {len(discovered_submolts)}")
 
+        # 4b) Optional: crawl per-submolt feeds to widen coverage (posts that may not surface in global views)
+        crawl_submolt_feeds = os.getenv("CRAWL_SUBMOLT_FEEDS", "0") == "1"
+        submolt_feed_max_pages = int(os.getenv("SUBMOLT_FEED_MAX_PAGES", "0"))  # 0 = skip
+        submolt_feed_sort = os.getenv("SUBMOLT_FEED_SORT", "new").strip() or "new"
+        submolt_feed_limit = int(os.getenv("SUBMOLT_FEED_LIMIT", "0"))  # 0 = no cap on number of submolts
+
+        if crawl_submolt_feeds and submolt_feed_max_pages and discovered_submolts:
+            names = [s.get("name") for s in discovered_submolts if s.get("name")]
+            if submolt_feed_limit and len(names) > submolt_feed_limit:
+                names = names[:submolt_feed_limit]
+            print(f"[submolt-feed] crawling feeds for {len(names)} submolts (pages={submolt_feed_max_pages}, sort={submolt_feed_sort})")
+
+            for sm in names:
+                key = f"submolt_feed_offset_{sm}"
+                offset = store.get_checkpoint(crawl_id, key)
+                pages = 0
+                prev_sig = None
+                repeat_pages = 0
+                stale_pages = 0
+
+                while True:
+                    params = {"sort": submolt_feed_sort, "limit": page, "offset": offset, "shuffle": int(time.time() * 1000)}
+                    try:
+                        resp = public_get_json(client, f"/submolts/{sm}/feed", params=params)
+                    except Exception:
+                        break
+
+                    batch = _as_list(resp, "posts", "data")
+                    if not batch:
+                        break
+
+                    sig = tuple(p.get("id") for p in batch[:10])
+                    if sig == prev_sig:
+                        repeat_pages += 1
+                    else:
+                        repeat_pages = 0
+                    prev_sig = sig
+
+                    new_ids = 0
+                    for p in batch:
+                        pid = p.get("id")
+                        if pid and pid not in seen_post_ids:
+                            seen_post_ids.add(pid)
+                            new_ids += 1
+                        sub = p.get("submolt")
+                        nm = submolt_name(sub)
+                        if nm and isinstance(sub, dict):
+                            submolts_seen[nm] = {**submolts_seen.get(nm, {"name": nm}), **sub}
+                        an = extract_author_name(p)
+                        if an:
+                            seen_agents.add(an)
+
+                    store.upsert_posts([norm_post_for_store(p) for p in batch], observed_at)
+
+                    old_offset = offset
+                    nxt = resp.get("next_offset")
+                    try:
+                        nxt_i = int(nxt)
+                    except Exception:
+                        nxt_i = None
+
+                    if nxt_i is not None and nxt_i > offset:
+                        offset = nxt_i
+                    else:
+                        offset += len(batch)
+
+                    store.set_checkpoint(crawl_id, key, offset)
+
+                    print(f"[submolt-feed] {sm} batch={len(batch)} new_ids={new_ids} offset:{old_offset}->{offset} has_more={resp.get('has_more')}")
+
+                    if new_ids == 0:
+                        stale_pages += 1
+                    else:
+                        stale_pages = 0
+
+                    pages += 1
+                    if pages >= submolt_feed_max_pages:
+                        break
+                    if repeat_pages >= max_repeat_pages:
+                        break
+                    if stale_pages >= max_stale_pages:
+                        break
+                    if not resp.get("has_more"):
+                        break
+
     # 5) Moderators for discovered submolts (cap calls)
     if moderators_limit > 0 and discovered_submolts:
         to_mod = discovered_submolts[:moderators_limit]
@@ -466,7 +571,7 @@ def main():
             if i % 100 == 0:
                 print(f"[mods] processed {i}/{len(to_mod)}")
 
-    # 6) Agent profiles
+    # 6) Agent profiles (optional)
     if fetch_agent_profiles and seen_agents:
         names = sorted(seen_agents)
         if profile_limit and len(names) > profile_limit:
@@ -484,7 +589,7 @@ def main():
             if i % 200 == 0:
                 print(f"[agents] profiled {i}/{len(names)}")
 
-    # 7) HTML scrape
+    # 7) Optional HTML scrape
     if scrape_html and seen_agents:
         from html_scrape import scrape_agent_page
 

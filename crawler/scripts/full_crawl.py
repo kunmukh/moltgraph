@@ -192,7 +192,7 @@ def main():
     profile_limit = int(os.getenv("PROFILE_LIMIT", "0"))  # 0 = no cap
 
     # posts paging controls
-    page = int(os.getenv("POSTS_PAGE_SIZE", "50"))
+    page = int(os.getenv("POSTS_PAGE_SIZE", "1000"))
     max_stale_pages = int(os.getenv("MAX_STALE_PAGES", "4"))  # stop if offset ignored (no new IDs)
     max_repeat_pages = int(os.getenv("MAX_REPEAT_PAGES", "2"))  # stop if same signature repeats
     max_pages = int(os.getenv("POSTS_MAX_PAGES", "0"))  # 0 = no cap
@@ -584,6 +584,24 @@ def main():
                 agent_obj = prof.get("agent", {}) or {}
                 if agent_obj:
                     upsert_agents_profile_aware(store, [agent_obj], observed_at)
+                    owner = agent_obj.get("owner")
+                    if isinstance(owner, dict):
+                        handle = owner.get("x_handle") or owner.get("xHandle")
+                        if isinstance(handle, str) and handle.strip():
+                            h = handle.strip().lstrip("@")
+                            url = owner.get("x_url") or owner.get("xUrl") or f"https://x.com/{h}"
+                            store.upsert_x_owner(
+                                agent_obj.get("name") or name,
+                                h,
+                                url,
+                                observed_at,
+                                x_name=owner.get("x_name") or owner.get("xName"),
+                                x_avatar=owner.get("x_avatar") or owner.get("xAvatar"),
+                                x_bio=owner.get("x_bio") or owner.get("xBio"),
+                                x_follower_count=owner.get("x_follower_count") if "x_follower_count" in owner else owner.get("xFollowerCount"),
+                                x_following_count=owner.get("x_following_count") if "x_following_count" in owner else owner.get("xFollowingCount"),
+                                x_verified=owner.get("x_verified") if "x_verified" in owner else owner.get("xVerified"),
+                            )
             except Exception:
                 continue
             if i % 200 == 0:

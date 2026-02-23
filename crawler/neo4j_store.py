@@ -164,19 +164,67 @@ class Neo4jStore:
             for batch in chunked(rows, 500):
                 s.run(q, rows=batch, obs=observed_at_iso, mark_profile=mark_profile)
 
-    def upsert_x_owner(self, agent_name: str, handle: str, url: Optional[str], observed_at_iso: str):
+    # def upsert_x_owner(self, agent_name: str, handle: str, url: Optional[str], observed_at_iso: str):
+    #     q = """
+    #     MATCH (a:Agent {name:$agent})
+    #     MERGE (x:XAccount {handle:$handle})
+    #     ON CREATE SET x.first_seen_at=datetime($obs)
+    #     SET x.last_seen_at=datetime($obs),
+    #         x.url = coalesce($url, x.url)
+    #     MERGE (a)-[r:HAS_OWNER_X]->(x)
+    #     ON CREATE SET r.first_seen_at=datetime($obs)
+    #     SET r.last_seen_at=datetime($obs)
+    #     """
+    #     with self.driver.session() as s:
+    #         s.run(q, agent=agent_name, handle=handle, url=url, obs=observed_at_iso)
+    def upsert_x_owner(
+        self,
+        agent_name: str,
+        handle: str,
+        url: Optional[str],
+        observed_at_iso: str,
+        *,
+        x_name: Optional[str] = None,
+        x_avatar: Optional[str] = None,
+        x_bio: Optional[str] = None,
+        x_follower_count: Optional[int] = None,
+        x_following_count: Optional[int] = None,
+        x_verified: Optional[bool] = None,
+        ):
+        if not isinstance(handle, str) or not handle.strip():
+            return
+        handle = handle.strip().lstrip("@")
+
         q = """
         MATCH (a:Agent {name:$agent})
         MERGE (x:XAccount {handle:$handle})
         ON CREATE SET x.first_seen_at=datetime($obs)
         SET x.last_seen_at=datetime($obs),
-            x.url = coalesce($url, x.url)
+            x.url = coalesce($url, x.url),
+            x.name = coalesce($x_name, x.name),
+            x.avatar_url = coalesce($x_avatar, x.avatar_url),
+            x.bio = coalesce($x_bio, x.bio),
+            x.follower_count = coalesce($x_follower_count, x.follower_count),
+            x.following_count = coalesce($x_following_count, x.following_count),
+            x.is_verified = coalesce($x_verified, x.is_verified)
         MERGE (a)-[r:HAS_OWNER_X]->(x)
         ON CREATE SET r.first_seen_at=datetime($obs)
         SET r.last_seen_at=datetime($obs)
         """
         with self.driver.session() as s:
-            s.run(q, agent=agent_name, handle=handle, url=url, obs=observed_at_iso)
+            s.run(
+                q,
+                agent=agent_name,
+                handle=handle,
+                url=url,
+                obs=observed_at_iso,
+                x_name=x_name,
+                x_avatar=x_avatar,
+                x_bio=x_bio,
+                x_follower_count=x_follower_count,
+                x_following_count=x_following_count,
+                x_verified=x_verified,
+            )
 
     def upsert_submolts(self, submolts: List[Dict[str, Any]], observed_at_iso: str):
         q = """

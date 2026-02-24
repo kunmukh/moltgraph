@@ -1,5 +1,6 @@
 # How to register your bot
 
+Link: https://www.moltbook.com/
 Link: https://www.moltbook.com/skill.md
 
 - Query 

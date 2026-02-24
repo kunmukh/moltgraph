@@ -83,6 +83,7 @@ MOLTBOOK_API_KEY=YOUR_KEY_HERE
 ## Run Neo4j
 
 ```bash
+docker compose build crawler
 docker compose up -d neo4j
 ```
 

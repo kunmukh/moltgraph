@@ -56,7 +56,7 @@ services:
       - REQUESTS_PER_MINUTE=60   # stay below 100/min general limit
     volumes:
       - ./crawler:/app
-    command: ["python", "-m", "scripts.weekly_crawl"]
+    command: ["python", "-m", "scripts.full_crawl"]
 
 volumes:
   neo4j_data:

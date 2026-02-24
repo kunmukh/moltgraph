@@ -209,7 +209,7 @@ If you use this crawler in academic work, please cite it.
   month        = {2},
   version      = {0.1},
   note         = {GitHub repository},
-  url          = {<REPO_URL>}
+  url          = {\url{https://github.com/kunmukh/moltgraph}}
 }
 ```
 

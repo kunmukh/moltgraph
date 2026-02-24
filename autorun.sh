@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --------- config ----------
-PROJECT_DIR="/mnt/vault/kunal/social-data/Moltbook/"   # <-- change to folder with docker-compose.yml / compose.yml
+PROJECT_DIR="./Moltbook/"   # <-- change to folder with docker-compose.yml / compose.yml
 SLEEP_SECONDS=600                      # 10 minutes
 LOG_FILE="${PROJECT_DIR}/full_crawl_loop.log"
 # ---------------------------

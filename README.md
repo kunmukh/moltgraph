@@ -6,7 +6,6 @@ We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, com
 It supports:
 - **Smoke test** (≈30s) to validate the pipeline ensuring the API + Neo4j writes end-to-end  
 - **Full crawl** (one-time historical ingest up to “now”)  
-- **Weekly crawl** (incremental updates since last crawl cutoff)  
 - Temporal evolution via `first_seen_at`, `last_seen_at`, `ended_at`, and crawl/feed snapshots
 
 ---
@@ -24,10 +23,14 @@ It supports:
 .
 ├── docker-compose.yml              # Neo4j + crawler services
 ├── credentials.json                # (local) creds (keep secret)
+├── graph-schema.md                 # readme about the Neo4j graph schema
+├── database.md                     # readme about the Neo4j database
+├── db-maintaining.md               # readme about backfilling to maintaining Neo4j database
+├── autorun.sh                      # autorun script to the full crawler
+├── images/                         # contain example images of the Neo4j graph
 ├── moltbook-registration
-│   ├── bot_register.txt            # notes / registration info
-│   ├── query.json                  # debugging artifacts
-│   └── response.jso
+│   ├── bot_register.md             # notes / registration info
+│   └── example_query_response.md   # making post or querying regarding post
 └── crawler/
     ├── Dockerfile                  # crawler container image
     ├── requirements.txt            # python deps
@@ -37,10 +40,13 @@ It supports:
     ├── cypher/
     │   └── schema.cypher           # constraints + indexes
     └── scripts/
+        ├── backfill/
+        │  ├── comments.py          # xx
+        │  ├── post_comments.py     # xx
+        │  └── x_accounts.py        # xx
         ├── init_db.py              # applies schema.cypher
         ├── smoke_test.py           # 30s end-to-end validation
-        ├── full_crawl.py           # one-time full ingest
-        └── weekly_crawl.py         # weekly incremental ingest
+        └── full_crawl.py           # one-time full ingest
 ```
 
 ---
@@ -171,33 +177,6 @@ MATCH (cr:Crawl)
 RETURN cr.id, cr.mode, cr.started_at, cr.submolts_offset, cr.posts_offset, cr.last_updated_at
 ORDER BY cr.started_at DESC
 LIMIT 5;
-```
-
----
-
-## Weekly Crawl (Incremental)
-
-Weekly crawl:
-- Refreshes Submolts + Moderators
-- Fetches new posts since `last_cutoff`
-- Updates comments for new posts
-- Profile-refreshes newly seen agents (and stale agents)
-
-Run:
-
-```bash
-docker compose run --rm crawler python -m scripts.weekly_crawl
-```
-
-Tuning:
-
-```bash
-docker compose run --rm \
-  -e REQUESTS_PER_MINUTE=60 \
-  -e CRAWL_COMMENTS=1 \
-  -e PROFILE_REFRESH_DAYS=7 \
-  -e PROFILE_REFRESH_LIMIT=500 \
-  crawler python -m scripts.weekly_crawl
 ```
 
 ---

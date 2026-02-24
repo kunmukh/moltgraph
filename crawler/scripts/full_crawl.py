@@ -46,6 +46,8 @@ def extract_author_name(obj: Dict[str, Any]) -> Optional[str]:
     a = obj.get("author")
     if isinstance(a, dict):
         return a.get("name")
+    if isinstance(a, str):
+        return a
     if isinstance(obj.get("author_name"), str):
         return obj.get("author_name")
     return None
@@ -106,8 +108,8 @@ def public_get_json(client: MoltbookClient, path: str, params: Optional[Dict[str
         # pace requests if the client has a limiter
         try:
             client._sleep_if_needed()  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[comments][ERROR] failed: {e}")
 
         r = requests.get(url, headers=headers, params=params, timeout=60)
 
@@ -227,8 +229,8 @@ def main():
     try:
         me = client.get_me()
         store.upsert_agents([me], observed_at)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[comments][ERROR] failed: {e}")
 
     # 2) Submolts seed slice (public)
     submolts_seed: List[Dict[str, Any]] = []
@@ -383,8 +385,8 @@ def main():
                             store.upsert_comments(pid, tree, observed_at)
                             collect_authors_from_comments(tree, seen_agents)
                             comments_posts_with_tree += 1
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"[comments][ERROR] failed: {e}")
 
             # offset advance
             old_offset = offset

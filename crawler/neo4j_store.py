@@ -422,7 +422,19 @@ class Neo4jStore:
 
 
         def norm(x: Dict[str, Any]) -> Dict[str, Any]:
-            author = x.get("author") or {}
+            author_raw = x.get("author")
+
+            # author can be a dict OR a string (observed in the wild)
+            if isinstance(author_raw, dict):
+                author = author_raw
+                author_name = author.get("name") or x.get("author_name")
+            elif isinstance(author_raw, str):
+                author = {}
+                author_name = author_raw
+            else:
+                author = {}
+                author_name = x.get("author_name")
+
             return {
                 "id": x.get("id"),
                 "post_id": x.get("post_id"),
@@ -439,9 +451,9 @@ class Neo4jStore:
                 # flatten_comments provides parent_id if we pass it through
                 "parent_id": x.get("parent_id"),
 
-                # author nested
+                # author nested (dict case) + safe fallbacks
                 "author_id": author.get("id") or x.get("author_id"),
-                "author_name": author.get("name"),
+                "author_name": author_name,
                 "author_description": author.get("description"),
                 "author_avatar_url": author.get("avatarUrl") or author.get("avatar_url"),
                 "author_karma": author.get("karma"),

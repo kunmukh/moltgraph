@@ -164,19 +164,6 @@ class Neo4jStore:
             for batch in chunked(rows, 500):
                 s.run(q, rows=batch, obs=observed_at_iso, mark_profile=mark_profile)
 
-    # def upsert_x_owner(self, agent_name: str, handle: str, url: Optional[str], observed_at_iso: str):
-    #     q = """
-    #     MATCH (a:Agent {name:$agent})
-    #     MERGE (x:XAccount {handle:$handle})
-    #     ON CREATE SET x.first_seen_at=datetime($obs)
-    #     SET x.last_seen_at=datetime($obs),
-    #         x.url = coalesce($url, x.url)
-    #     MERGE (a)-[r:HAS_OWNER_X]->(x)
-    #     ON CREATE SET r.first_seen_at=datetime($obs)
-    #     SET r.last_seen_at=datetime($obs)
-    #     """
-    #     with self.driver.session() as s:
-    #         s.run(q, agent=agent_name, handle=handle, url=url, obs=observed_at_iso)
     def upsert_x_owner(
         self,
         agent_name: str,
@@ -282,6 +269,8 @@ class Neo4jStore:
             p.is_pinned = coalesce(row.is_pinned, p.is_pinned),
             p.is_locked = coalesce(row.is_locked, p.is_locked),
             p.is_deleted = coalesce(row.is_deleted, p.is_deleted),
+            p.verification_status = coalesce(row.verification_status, p.verification_status),
+            p.is_spam = coalesce(row.is_spam, p.is_spam),
             p.submolt_id = coalesce(row.submolt_id, p.submolt_id),
             p.updated_at = CASE WHEN row.updated_at IS NULL THEN p.updated_at ELSE datetime(row.updated_at) END
         """
@@ -340,6 +329,8 @@ class Neo4jStore:
                 "is_deleted": p.get("is_deleted"),
                 "created_at": p.get("created_at"),
                 "updated_at": p.get("updated_at"),
+                "verification_status": p.get("verification_status"),
+                "is_spam": p.get("is_spam"),
 
                 # author fields
                 "author_id": author.get("id") or p.get("author_id"),
@@ -381,6 +372,8 @@ class Neo4jStore:
             c.reply_count = coalesce(row.reply_count, c.reply_count),
             c.is_deleted = coalesce(row.is_deleted, c.is_deleted),
             c.depth = coalesce(row.depth, c.depth),
+            c.verification_status = coalesce(row.verification_status, c.verification_status),
+            c.is_spam = coalesce(row.is_spam, c.is_spam),
             c.updated_at = CASE WHEN row.updated_at IS NULL THEN c.updated_at ELSE datetime(row.updated_at) END
         """
 
@@ -445,6 +438,8 @@ class Neo4jStore:
                 "reply_count": x.get("reply_count"),
                 "is_deleted": x.get("is_deleted"),
                 "depth": x.get("depth"),
+                "verification_status": x.get("verification_status"),
+                "is_spam": x.get("is_spam"),
                 "created_at": x.get("created_at"),
                 "updated_at": x.get("updated_at"),
 

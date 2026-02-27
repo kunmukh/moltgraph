@@ -2,7 +2,7 @@
 
 ## Apply Schema Updates (without wiping volumes)
 
-If you add new indexes/constraints, just re-run schema. Because statements use `IF NOT EXISTS`, this is safe.
+To add new indexes/constraints, just re-run schema. Because statements use `IF NOT EXISTS`, this is safe.
 
 Option A (recommended): rerun init script
 

@@ -73,15 +73,6 @@ class MoltbookClient:
 
                 # Retryable status codes
                 if r.status_code in (429, 502, 503, 504):
-                    # if r.status_code == 429:
-                    #     reset = r.headers.get("X-RateLimit-Reset")
-                    #     if reset:
-                    #         try:
-                    #             wait = max(float(reset) - time.time(), 1.0)
-                    #             time.sleep(wait)
-                    #             continue
-                    #         except Exception:
-                    #             pass
                     if r.status_code == 429:
                         # Prefer standard header
                         ra = r.headers.get("Retry-After")

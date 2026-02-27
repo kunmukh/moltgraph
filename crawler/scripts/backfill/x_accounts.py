@@ -115,7 +115,7 @@ def upsert_owner_link(
 ) -> None:
     url = owner.get("x_url") or owner.get("xUrl") or f"https://x.com/{handle}"
 
-    # Optional metadata (safe even if missing)
+    # Metadata (safe even if missing)
     x_name = owner.get("x_name") or owner.get("xName")
     x_avatar = owner.get("x_avatar") or owner.get("xAvatar")
     x_bio = owner.get("x_bio") or owner.get("xBio")

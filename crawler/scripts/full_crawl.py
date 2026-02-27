@@ -199,7 +199,7 @@ def main():
     max_repeat_pages = int(os.getenv("MAX_REPEAT_PAGES", "2"))  # stop if same signature repeats
     max_pages = int(os.getenv("POSTS_MAX_PAGES", "0"))  # 0 = no cap
 
-    # Optional additional "views" (sort,time) to widen coverage even if paging is flaky.
+    # Additional "views" (sort,time) to widen coverage even if paging is flaky.
     # (Undocumented but used in other crawlers; safe if ignored by API.)
     views_env = os.getenv("POST_VIEWS", "").strip()
     if views_env:
@@ -309,7 +309,7 @@ def main():
                 repeat_pages = 0
             prev_sig = sig
 
-            # Optional: enrich new posts only
+            # Enrich new posts only
             new_batch: List[Dict[str, Any]] = []
             new_ids = 0
 
@@ -440,7 +440,7 @@ def main():
         store.upsert_submolts(discovered_submolts, observed_at)
         print(f"[submolts] upserted discovered from posts: {len(discovered_submolts)}")
 
-        # 4b) Optional: crawl per-submolt feeds to widen coverage (posts that may not surface in global views)
+        # 4b) Crawl per-submolt feeds to widen coverage (posts that may not surface in global views)
         crawl_submolt_feeds = os.getenv("CRAWL_SUBMOLT_FEEDS", "0") == "1"
         submolt_feed_max_pages = int(os.getenv("SUBMOLT_FEED_MAX_PAGES", "0"))  # 0 = skip
         submolt_feed_sort = os.getenv("SUBMOLT_FEED_SORT", "new").strip() or "new"
@@ -573,7 +573,7 @@ def main():
             if i % 100 == 0:
                 print(f"[mods] processed {i}/{len(to_mod)}")
 
-    # 6) Agent profiles (optional)
+    # 6) Agent profiles
     if fetch_agent_profiles and seen_agents:
         names = sorted(seen_agents)
         if profile_limit and len(names) > profile_limit:
@@ -609,7 +609,7 @@ def main():
             if i % 200 == 0:
                 print(f"[agents] profiled {i}/{len(names)}")
 
-    # 7) Optional HTML scrape
+    # 7) HTML scrape
     if scrape_html and seen_agents:
         from html_scrape import scrape_agent_page
 

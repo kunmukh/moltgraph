@@ -41,9 +41,11 @@ It supports:
     │   └── schema.cypher           # constraints + indexes
     └── scripts/
         ├── backfill/
-        │  ├── comments.py          # xx
-        │  ├── post_comments.py     # xx
-        │  └── x_accounts.py        # xx
+        │  ├── comments.py          # backfill script to captures all the comments contents
+        │  ├── post_comments.py     # backfill script to captures all the posts and its contents
+        │  ├── is_deleted.py        # backfill script to captures if posts/comments are deleted
+        │  ├── is_spam.py           # backfill script to captures if posts/comments are marked as spam
+        │  └── x_accounts.py        # backfill script to captures all info about agent such as X handle
         ├── init_db.py              # applies schema.cypher
         ├── smoke_test.py           # 30s end-to-end validation
         └── full_crawl.py           # one-time full ingest

@@ -84,6 +84,53 @@ def upsert_agents_profile_aware(store: Neo4jStore, agents: List[Dict[str, Any]],
 # --------------------------
 # Public GET wrapper (no Authorization header)
 # --------------------------
+def _retry_delay_seconds(r: requests.Response, attempt: int, backoff: float) -> float:
+    """
+    Prefer Retry-After, then X-RateLimit-Reset / RateLimit-Reset.
+    Supports:
+      - Retry-After: <seconds>
+      - Retry-After: <http-date>
+      - X-RateLimit-Reset: epoch seconds / epoch ms / delta seconds
+    """
+    now = time.time()
+
+    retry_after = r.headers.get("Retry-After")
+    if retry_after:
+        # numeric seconds
+        try:
+            return max(float(retry_after), 1.0)
+        except ValueError:
+            pass
+
+        # HTTP date
+        try:
+            dt = parsedate_to_datetime(retry_after)
+            return max(dt.timestamp() - now, 1.0)
+        except Exception:
+            pass
+
+    reset = r.headers.get("X-RateLimit-Reset") or r.headers.get("RateLimit-Reset")
+    if reset:
+        try:
+            val = float(reset)
+
+            # epoch in milliseconds
+            if val > 1e12:
+                val = val / 1000.0
+
+            # epoch in seconds
+            if val > now + 1:
+                return max(val - now, 1.0)
+
+            # otherwise assume it's a delta
+            if val > 0:
+                return max(val, 1.0)
+        except Exception:
+            pass
+
+    # fallback exponential backoff + jitter
+    return min(backoff * (2 ** (attempt - 1)) + random.uniform(0, 1), 300.0)
+
 def public_get_json(client: MoltbookClient, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Moltbook's public listing endpoints (/posts, /submolts, /posts/:id/comments, etc.)
@@ -102,31 +149,37 @@ def public_get_json(client: MoltbookClient, path: str, params: Optional[Dict[str
         "Pragma": "no-cache",
     }
 
-    max_tries = 8
-    backoff = 1.5
+    max_tries = int(os.getenv("HTTP_MAX_TRIES", "10"))
+    base_backoff = float(os.getenv("HTTP_BACKOFF_SECONDS", "2.0"))
+
+    req_params = dict(params or {})
+    timeout = int(os.getenv("HTTP_TIMEOUT", "60"))
+
     for attempt in range(1, max_tries + 1):
-        # pace requests if the client has a limiter
         try:
             client._sleep_if_needed()  # type: ignore[attr-defined]
         except Exception as e:
-            print(f"[comments][ERROR] failed: {e}")
+            print(f"[http] limiter warning: {e}")
 
-        r = requests.get(url, headers=headers, params=params, timeout=60)
+        r = requests.get(url, headers=headers, params=req_params, timeout=timeout)
 
-        # Retryable
         if r.status_code in (429, 502, 503, 504):
-            if r.status_code == 429:
-                reset = r.headers.get("X-RateLimit-Reset")
-                if reset:
-                    wait = max(float(reset) - time.time(), 1.0)
-                    time.sleep(wait)
-                    continue
+            wait = _retry_delay_seconds(r, attempt, base_backoff)
+
+            # On repeated 429s for large post pages, reduce limit adaptively
+            if r.status_code == 429 and path == "/posts":
+                lim = req_params.get("limit")
+                if isinstance(lim, int) and lim > 100:
+                    new_lim = max(lim // 2, 100)
+                    if new_lim != lim:
+                        req_params["limit"] = new_lim
+                        print(f"[http] 429 on {path}; reducing limit {lim} -> {new_lim}")
+
             if attempt < max_tries:
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 60)
+                print(f"[http] retryable {r.status_code} on {path}; sleeping {wait:.1f}s (attempt {attempt}/{max_tries})")
+                time.sleep(wait)
                 continue
 
-        # Sometimes endpoints unexpectedly require auth; caller can fallback to client._req
         if r.status_code == 401:
             raise PermissionError("401 Unauthorized on public_get_json")
 
@@ -134,7 +187,7 @@ def public_get_json(client: MoltbookClient, path: str, params: Optional[Dict[str
         return r.json()
 
     r.raise_for_status()
-    return {}  # unreachable
+    return {}
 
 
 def get_comments_any(client: MoltbookClient, post_id: str, sort: str, limit: int) -> List[Dict[str, Any]]:
@@ -295,6 +348,9 @@ def main():
             except PermissionError:
                 # fallback to auth if public blocked
                 resp = client.list_posts(sort=sort, limit=page, offset=offset)
+            except Exception as e:
+                print(f"[posts] fetch failed sort={sort} time={time_window or '-'} offset={offset}: {e}")
+                break
 
             batch = _as_list(resp, "posts", "data")
             if not batch:
@@ -312,6 +368,7 @@ def main():
             # Enrich new posts only
             new_batch: List[Dict[str, Any]] = []
             new_ids = 0
+            new_post_ids_this_page: Set[str] = set()
 
             for p in batch:
                 pid = p.get("id")
@@ -320,6 +377,7 @@ def main():
                 if pid not in seen_post_ids:
                     seen_post_ids.add(pid)
                     new_ids += 1
+                    new_post_ids_this_page.add(pid)
 
                 # submolt discovery
                 sub = p.get("submolt")
@@ -343,20 +401,24 @@ def main():
                     pid = p.get("id")
                     if not pid:
                         continue
-                    # only enrich when we first see the post
-                    # (we don't store a separate "enriched" set; this is good enough)
+
+                    # Do NOT re-fetch details for posts we've already seen earlier
+                    if pid not in new_post_ids_this_page:
+                        new_batch.append(p)
+                        continue
+
                     try:
                         det = public_get_json(client, f"/posts/{pid}", params={"shuffle": int(time.time() * 1000)})
                         post_obj = det.get("post") if isinstance(det, dict) else None
                         new_batch.append(post_obj or p)
 
-                        # Cache full comment tree from post details if present
                         if crawl_comments and comments_from_post_details and pid not in commented_post_ids:
                             if isinstance(post_obj, dict):
                                 tree = post_obj.get("comments")
                                 if isinstance(tree, list) and tree:
                                     post_comments_cache[pid] = tree
-                    except Exception:
+                    except Exception as e:
+                        print(f"[posts][detail] failed pid={pid}: {e}")
                         new_batch.append(p)
             else:
                 new_batch = batch

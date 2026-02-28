@@ -43,7 +43,7 @@ services:
       # Crawl knobs
       - FETCH_POST_DETAILS=1        # 1 = also GET /posts/:id for every post (slower, richer)
       - SCRAPE_AGENT_HTML=0         # 1 = scrape /u/<agent> for Similar Agents + Human Owner X
-      - "USER_AGENT=MoltGraphCrawler/0.1 (research; contact=mkunal@vt.edu)"  # User-Agent header sent on HTTP requests (identify crawler + contact)
+      - "USER_AGENT=MoltGraphCrawler/0.1"  # User-Agent header sent on HTTP requests (identify crawler + contact)
       - CRAWL_COMMENTS=1            # 1 = crawl comments for posts (extra requests + storage); 0 = skip comments
       - COMMENTS_LIMIT_PER_POST=1000  # Max comments to fetch per post (safety cap; high values can be very slow/heavy)
       - FETCH_AGENT_PROFILES=1      # 1 = fetch /u/<agent> profile metadata (and related endpoints if implemented); 0 = skip

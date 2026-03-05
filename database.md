@@ -1,5 +1,50 @@
 # Neo4j Specific Database Queries
 
+## Check Database Size
+
+```shell
+$ docker exec moltbook-neo4j sh -c 'du -sh /data /data/databases /data/transactions 2>/dev/null'
+1.1G    /data
+
+$ docker exec moltbook-neo4j sh -c 'du -sh /data/databases/neo4j /data/databases/system /data/transactions/neo4j /data/transactions/system 2>/dev/null'
+312M    /data/databases/neo4j
+1.2M    /data/databases/system
+514M    /data/transactions/neo4j
+258M    /data/transactions/system
+```
+
+## Download Database dump
+
+```shell
+# 1) Get the exact Neo4j version running in your container
+VER=$(docker exec moltbook-neo4j neo4j --version | awk '{print $NF}')
+
+# 2) Make a local folder for dump files
+mkdir -p "$HOME/neo4j_backups"
+
+# 3) Stop the running Neo4j container (required for Community/offline dump)
+docker stop moltbook-neo4j
+
+# 4) Dump the main database
+docker run --rm -it \
+  -v moltbook_neo4j_data:/data \
+  -v "$HOME/neo4j_backups":/backups \
+  neo4j/neo4j-admin:$VER \
+  neo4j-admin database dump neo4j --to-path=/backups --overwrite-destination=true
+
+# 5) Dump the system database too
+docker run --rm -it \
+  -v moltbook_neo4j_data:/data \
+  -v "$HOME/neo4j_backups":/backups \
+  neo4j/neo4j-admin:$VER \
+  neo4j-admin database dump system --to-path=/backups --overwrite-destination=true
+
+# 6) Start Neo4j again
+docker start moltbook-neo4j
+```
+
+- Backup location: `$HOME/neo4j_backups/neo4j.dump` and `$HOME/neo4j_backups/system.dump`
+
 ## Apply Schema Updates (without wiping volumes)
 
 To add new indexes/constraints, just re-run schema. Because statements use `IF NOT EXISTS`, this is safe.

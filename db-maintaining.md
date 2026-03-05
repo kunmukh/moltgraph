@@ -33,7 +33,7 @@ docker compose run --rm \
   -e MOLTBOOK_API_KEY="$MOLTBOOK_API_KEY" \
   -e USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
   -e REQUESTS_PER_MINUTE=20 \
-  crawler python -m scripts.backfill_post_comment_moderation \
+  crawler python -m scripts.backfill.is_spam \
     --limit-posts 1000 \
     --only-missing \
     --mark
@@ -50,7 +50,7 @@ docker compose run --rm \
   -e MOLTBOOK_API_KEY="$MOLTBOOK_API_KEY" \
   -e USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
   -e REQUESTS_PER_MINUTE=20 \
-  crawler python -m scripts.backfill_deleted_flags_clean \
+  crawler python -m scripts.backfill.is_deleted \
     --limit-agents 5000 \
     --limit-submolts 2000 \
     --limit-posts 10000 \

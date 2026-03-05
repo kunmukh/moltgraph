@@ -110,6 +110,55 @@ def update_post_moderation(
         )
 
 
+
+def mark_post_deleted_404(
+    store: Neo4jStore,
+    post_id: str,
+    observed_at: str,
+    *,
+    reason: str = "api_404",
+) -> None:
+    """
+    Moltbook returns 404 for posts that no longer exist (commonly deleted).
+    We keep the Post node but mark it deleted and record when this was observed.
+    """
+    q = """
+    MATCH (p:Post {id:$id})
+    SET p.is_deleted = true,
+        p.updated_at = datetime($obs),
+        p.last_seen_at = datetime($obs),
+        p.deleted_at = datetime($obs),
+        p.deletion_reason = $reason
+    """
+    with store.driver.session() as s:
+        s.run(q, id=post_id, obs=observed_at, reason=reason)
+
+def mark_comments_deleted_by_post_404(
+    store: Neo4jStore,
+    post_id: str,
+    observed_at: str,
+    *,
+    reason: str = "post_api_404",
+) -> int:
+    """
+    If a Post 404s, comments under that post are typically also gone/unreachable.
+    Keep the Comment nodes but mark them deleted.
+    """
+    q = """
+    MATCH (c:Comment)-[:ON_POST]->(p:Post {id:$id})
+    SET c.is_deleted = true,
+        c.updated_at = datetime($obs),
+        c.last_seen_at = datetime($obs),
+        c.deleted_at = datetime($obs),
+        c.deletion_reason = $reason
+    RETURN count(c) AS updated
+    """
+    with store.driver.session() as s:
+        rec = s.run(q, id=post_id, obs=observed_at, reason=reason).single()
+        return int(rec["updated"]) if rec and rec.get("updated") is not None else 0
+
+
+
 def update_comment_moderation_batch(
     store: Neo4jStore,
     rows: List[Dict[str, Any]],
@@ -190,7 +239,18 @@ def main() -> int:
     try:
         for i, post_id in enumerate(post_ids, 1):
             try:
-                post_obj = fetch_post(client, post_id)
+                try:
+                    post_obj = fetch_post(client, post_id)
+                except requests.exceptions.HTTPError as e:
+                    code = getattr(getattr(e, "response", None), "status_code", None)
+                    if code == 404:
+                        mark_post_deleted_404(store, post_id, obs)
+                        mark_comments_deleted_by_post_404(store, post_id, obs)
+                        if args.mark:
+                            mark_post_status(store, post_id, "post_deleted_404", 0, 0, obs)
+                        continue
+                    raise
+
                 if not post_obj:
                     if args.mark:
                         mark_post_status(store, post_id, "post_empty", 0, 0, obs)
@@ -204,12 +264,24 @@ def main() -> int:
                     observed_at=obs,
                 )
 
-                comments_tree = fetch_comments(
-                    client,
-                    post_id=post_id,
-                    sort=args.sort,
-                    limit=args.max_comments,
-                )
+
+                try:
+                    comments_tree = fetch_comments(
+                        client,
+                        post_id=post_id,
+                        sort=args.sort,
+                        limit=args.max_comments,
+                    )
+                except requests.exceptions.HTTPError as e:
+                    code = getattr(getattr(e, "response", None), "status_code", None)
+                    if code == 404:
+                        mark_post_deleted_404(store, post_id, obs)
+                        mark_comments_deleted_by_post_404(store, post_id, obs)
+                        if args.mark:
+                            mark_post_status(store, post_id, "comments_deleted_404", 0, 0, obs)
+                        continue
+                    raise
+
                 comments_flat = flatten_comments(comments_tree)
 
                 rows = []

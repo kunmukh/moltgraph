@@ -20,12 +20,17 @@ Behavior:
 import os
 import time
 import argparse
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
 
 from neo4j_store import Neo4jStore
 from moltbook_client import MoltbookClient
+
+
+def iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def flatten_comments(tree: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -141,6 +146,72 @@ def update_post(store: Neo4jStore, post_id: str, is_deleted: Any, updated_at: Op
         return int(rec["updated"]) if rec and rec.get("updated") is not None else 0
 
 
+
+def mark_post_deleted_404(store: Neo4jStore, post_id: str, observed_at: str, *, reason: str = "api_404") -> int:
+    """
+    If Moltbook returns 404 for a post fetch/comments fetch, infer post was deleted.
+    Keep the node; mark it deleted and record when observed.
+    """
+    q = """
+    MATCH (p:Post {id:$id})
+    SET p.is_deleted = true,
+        p.updated_at = datetime($obs),
+        p.last_seen_at = datetime($obs),
+        p.deleted_at = datetime($obs),
+        p.deletion_reason = $reason
+    RETURN count(p) AS updated
+    """
+    with store.driver.session() as s:
+        rec = s.run(q, id=post_id, obs=observed_at, reason=reason).single()
+        return int(rec["updated"]) if rec and rec.get("updated") is not None else 0
+
+def mark_agent_deleted_404(store: Neo4jStore, name: str, observed_at: str, *, reason: str = "api_404") -> int:
+    """If Moltbook returns 404 for an agent profile fetch, infer agent was deleted."""
+    q = """
+    MATCH (a:Agent {name:$name})
+    SET a.is_deleted = true,
+        a.updated_at = datetime($obs),
+        a.last_seen_at = datetime($obs),
+        a.deleted_at = datetime($obs),
+        a.deletion_reason = $reason
+    RETURN count(a) AS updated
+    """
+    with store.driver.session() as s:
+        rec = s.run(q, name=name, obs=observed_at, reason=reason).single()
+        return int(rec["updated"]) if rec and rec.get("updated") is not None else 0
+
+def mark_submolt_deleted_404(store: Neo4jStore, name: str, observed_at: str, *, reason: str = "api_404") -> int:
+    """If Moltbook returns 404 for a submolt fetch, infer submolt was deleted."""
+    q = """
+    MATCH (s:Submolt {name:$name})
+    SET s.is_deleted = true,
+        s.updated_at = datetime($obs),
+        s.last_seen_at = datetime($obs),
+        s.deleted_at = datetime($obs),
+        s.deletion_reason = $reason
+    RETURN count(s) AS updated
+    """
+    with store.driver.session() as s:
+        rec = s.run(q, name=name, obs=observed_at, reason=reason).single()
+        return int(rec["updated"]) if rec and rec.get("updated") is not None else 0
+
+def mark_comments_deleted_by_post_404(store: Neo4jStore, post_id: str, observed_at: str, *, reason: str = "post_api_404") -> int:
+    """If a Post 404s, comments under that post are typically also gone/unreachable. Mark them deleted."""
+    q = """
+    MATCH (c:Comment)-[:ON_POST]->(p:Post {id:$id})
+    SET c.is_deleted = true,
+        c.updated_at = datetime($obs),
+        c.last_seen_at = datetime($obs),
+        c.deleted_at = datetime($obs),
+        c.deletion_reason = $reason
+    RETURN count(c) AS updated
+    """
+    with store.driver.session() as s:
+        rec = s.run(q, id=post_id, obs=observed_at, reason=reason).single()
+        return int(rec["updated"]) if rec and rec.get("updated") is not None else 0
+
+
+
 def update_comments_batch(store: Neo4jStore, rows: List[Dict[str, Any]]) -> int:
     if not rows:
         return 0
@@ -185,10 +256,14 @@ def main() -> int:
         os.environ["NEO4J_PASSWORD"],
     )
 
+    obs = iso_now()
+
     agent_updates = 0
     submolt_updates = 0
     post_updates = 0
     comment_updates = 0
+    deleted_404 = 0
+    comments_deleted_404 = 0
     no_delete_field = 0
     errors = 0
 
@@ -198,7 +273,14 @@ def main() -> int:
             print(f"[agents] checking {len(names)}")
             for i, name in enumerate(names, 1):
                 try:
-                    prof = client.get_agent_profile(name) or {}
+                    try:
+                        prof = client.get_agent_profile(name) or {}
+                    except requests.exceptions.HTTPError as e:
+                        code = getattr(getattr(e, "response", None), "status_code", None)
+                        if code == 404:
+                            deleted_404 += mark_agent_deleted_404(store, name, obs)
+                            continue
+                        raise
                     agent = prof.get("agent") if isinstance(prof.get("agent"), dict) else prof
                     if isinstance(agent, dict) and "is_deleted" in agent:
                         agent_updates += update_agent(
@@ -223,7 +305,14 @@ def main() -> int:
             print(f"[submolts] checking {len(names)}")
             for i, name in enumerate(names, 1):
                 try:
-                    sub = client.get_submolt(name) or {}
+                    try:
+                        sub = client.get_submolt(name) or {}
+                    except requests.exceptions.HTTPError as e:
+                        code = getattr(getattr(e, "response", None), "status_code", None)
+                        if code == 404:
+                            deleted_404 += mark_submolt_deleted_404(store, name, obs)
+                            continue
+                        raise
                     if isinstance(sub, dict) and "is_deleted" in sub:
                         submolt_updates += update_submolt(
                             store,
@@ -250,7 +339,15 @@ def main() -> int:
             print(f"[posts] checking {len(post_ids)}")
             for i, post_id in enumerate(post_ids, 1):
                 try:
-                    post = client.get_post(post_id) or {}
+                    try:
+                        post = client.get_post(post_id) or {}
+                    except requests.exceptions.HTTPError as e:
+                        code = getattr(getattr(e, "response", None), "status_code", None)
+                        if code == 404:
+                            deleted_404 += mark_post_deleted_404(store, post_id, obs)
+                            comments_deleted_404 += mark_comments_deleted_by_post_404(store, post_id, obs)
+                            continue
+                        raise
                     if isinstance(post, dict) and "is_deleted" in post:
                         post_updates += update_post(
                             store,
@@ -273,12 +370,21 @@ def main() -> int:
             print(f"[comments] checking comments for {len(post_ids)} posts")
             for i, post_id in enumerate(post_ids, 1):
                 try:
-                    tree = fetch_comments_public_then_auth(
-                        client,
-                        post_id,
-                        sort=args.comments_sort,
-                        limit=args.max_comments,
-                    )
+                    try:
+                        tree = fetch_comments_public_then_auth(
+                            client,
+                            post_id,
+                            sort=args.comments_sort,
+                            limit=args.max_comments,
+                        )
+                    except requests.exceptions.HTTPError as e:
+                        code = getattr(getattr(e, "response", None), "status_code", None)
+                        if code == 404:
+                            deleted_404 += mark_post_deleted_404(store, post_id, obs)
+                            comments_deleted_404 += mark_comments_deleted_by_post_404(store, post_id, obs)
+                            continue
+                        raise
+
                     flat = flatten_comments(tree)
 
                     rows = []
@@ -315,6 +421,8 @@ def main() -> int:
         f"submolts_updated={submolt_updates} "
         f"posts_updated={post_updates} "
         f"comments_updated={comment_updates} "
+        f"deleted_404={deleted_404} "
+        f"comments_deleted_404={comments_deleted_404} "
         f"no_delete_field={no_delete_field} "
         f"errors={errors}"
     )

@@ -21,7 +21,8 @@ from neo4j_store import Neo4jStore
 
 
 def iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    # Neo4j datetime() is happiest with a 'Z' suffix
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
 def _normalize_comment_tree(tree: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -122,6 +123,39 @@ def mark_post_backfill(store: Neo4jStore, post_id: str, *, status: str, expected
     with store.driver.session() as s:
         s.run(q, id=post_id, obs=obs, status=status, expected=expected, got_before=got_before, got_fetched=got_fetched)
 
+def mark_post_deleted_404(store: Neo4jStore, post_id: str, obs: str, *, reason: str = "api_404") -> None:
+    """404 from /posts/:id or /posts/:id/comments => post no longer exists (mark deleted but keep node)."""
+    q = """
+    MERGE (p:Post {id:$id})
+    ON CREATE SET p.first_seen_at = datetime($obs),
+                  p.created_at = datetime($obs)
+    SET p.last_seen_at = datetime($obs),
+        p.updated_at = datetime($obs),
+        p.is_deleted = true,
+        p.deleted_at = datetime($obs),
+        p.deletion_reason = $reason
+    """
+    with store.driver.session() as s:
+        s.run(q, id=post_id, obs=obs, reason=reason)
+
+
+def mark_comments_deleted_for_post(store: Neo4jStore, post_id: str, obs: str, *, reason: str = "api_404") -> None:
+    """If a post is deleted, any comments we previously stored under it should be marked deleted too."""
+    q = """
+    MATCH (p:Post {id:$id})
+    OPTIONAL MATCH (c:Comment)-[:ON_POST]->(p)
+    WITH collect(c) AS cs
+    FOREACH (c IN cs |
+        SET c.last_seen_at = datetime($obs),
+            c.updated_at = datetime($obs),
+            c.is_deleted = true,
+            c.deleted_at = datetime($obs),
+            c.deletion_reason = $reason
+    )
+    """
+    with store.driver.session() as s:
+        s.run(q, id=post_id, obs=obs, reason=reason)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -149,6 +183,7 @@ def main() -> int:
 
     ok = 0
     skipped_empty = 0
+    skipped_deleted = 0
     errors = 0
 
     try:
@@ -179,22 +214,38 @@ def main() -> int:
                 if args.mark:
                     mark_post_backfill(store, post_id, status="ok", expected=expected, got_before=got_before, got_fetched=len(tree), obs=obs)
 
+            except requests.exceptions.HTTPError as e:
+                code = getattr(getattr(e, "response", None), "status_code", None)
+                if code == 404:
+                    # Treat 404 as a deletion signal (keep the nodes, just mark them).
+                    mark_post_deleted_404(store, post_id, obs)
+                    mark_comments_deleted_for_post(store, post_id, obs)
+                    skipped_deleted += 1
+                    print(f"[deleted][post] {post_id}: inferred via 404")
+                    if args.mark:
+                        mark_post_backfill(store, post_id, status="deleted_404", expected=expected, got_before=got_before, got_fetched=0, obs=obs)
+                    continue
+
+                errors += 1
+                print(f"[error][http] post={post_id}: {e}")
+                if args.mark:
+                    mark_post_backfill(store, post_id, status="error", expected=expected, got_before=got_before, got_fetched=0, obs=obs)
+
             except Exception as e:
                 errors += 1
                 print(f"[error] post={post_id}: {e}")
                 if args.mark:
                     mark_post_backfill(store, post_id, status="error", expected=expected, got_before=got_before, got_fetched=0, obs=obs)
-
             if args.sleep_seconds > 0:
                 time.sleep(args.sleep_seconds)
 
             if i % 50 == 0:
-                print(f"[backfill-comments] {i}/{len(cands)} ok={ok} empty={skipped_empty} errors={errors}")
+                print(f"[backfill-comments] {i}/{len(cands)} ok={ok} empty={skipped_empty} deleted={skipped_deleted} errors={errors}")
 
     finally:
         store.close()
 
-    print(f"[done] ok={ok} empty={skipped_empty} errors={errors}")
+    print(f"[done] ok={ok} empty={skipped_empty} deleted={skipped_deleted} errors={errors}")
     return 0
 
 

@@ -50,6 +50,59 @@ def iso_now() -> str:
     # Neo4j datetime() is happiest with a 'Z' suffix
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
+def mark_agent_profile_fetched(
+    store: Neo4jStore,
+    *,
+    agent_name: str,
+    observed_at: str,
+    status: str,
+    error_code: Optional[int] = None,
+    dry_run: bool = False,
+) -> None:
+    """Stamp that we attempted to fetch an agent profile (even if we didn't find owner/x handle)."""
+    if dry_run:
+        return
+    q = """
+    MERGE (a:Agent {name:$name})
+    ON CREATE SET a.first_seen_at = datetime($obs),
+                  a.created_at = datetime($obs)
+    SET a.last_seen_at = datetime($obs),
+        a.profile_last_fetched_at = datetime($obs),
+        a.profile_last_fetch_status = $status,
+        a.profile_last_fetch_error_code = $error_code
+    """
+    with store.driver.session() as s:
+        s.run(q, name=agent_name, obs=observed_at, status=status, error_code=error_code)
+
+
+def mark_agent_deleted_404(
+    store: Neo4jStore,
+    *,
+    agent_name: str,
+    observed_at: str,
+    reason: str = "api_404",
+    dry_run: bool = False,
+) -> None:
+    """404 from /agents/profile => agent no longer exists (mark deleted but keep node)."""
+    if dry_run:
+        print(f"[DRY] mark Agent({agent_name}) deleted via 404")
+        return
+    q = """
+    MERGE (a:Agent {name:$name})
+    ON CREATE SET a.first_seen_at = datetime($obs),
+                  a.created_at = datetime($obs)
+    SET a.last_seen_at = datetime($obs),
+        a.profile_last_fetched_at = datetime($obs),
+        a.is_deleted = true,
+        a.updated_at = datetime($obs),
+        a.deleted_at = datetime($obs),
+        a.deletion_reason = $reason,
+        a.profile_last_fetch_status = "deleted_404",
+        a.profile_last_fetch_error_code = 404
+    """
+    with store.driver.session() as s:
+        s.run(q, name=agent_name, obs=observed_at, reason=reason)
+
 
 def clean_handle(h: Any) -> Optional[str]:
     if not isinstance(h, str):
@@ -219,20 +272,37 @@ def main() -> int:
     try:
         for i, name in enumerate(names, 1):
             try:
-                prof = get_profile_resilient(client, name)
+                try:
+                    prof = get_profile_resilient(client, name)
+                except requests.exceptions.HTTPError as e:
+                    resp = getattr(e, "response", None)
+                    code = resp.status_code if resp is not None else None
+                    if code == 404:
+                        mark_agent_deleted_404(store, agent_name=name, observed_at=observed_at, dry_run=args.dry_run)
+                        print(f"[deleted][agent] {name}: inferred via 404")
+                        # also stamp fetch attempt so we don't keep re-trying this agent
+                        mark_agent_profile_fetched(store, agent_name=name, observed_at=observed_at, status="deleted_404", error_code=404, dry_run=args.dry_run)
+                        continue
+                    raise
+
+                # record that we fetched the profile (even if no owner/x handle)
+                mark_agent_profile_fetched(store, agent_name=name, observed_at=observed_at, status="ok", dry_run=args.dry_run)
                 agent_obj = prof.get("agent") or {}
                 if not isinstance(agent_obj, dict) or not agent_obj:
                     skipped_no_owner += 1
+                    mark_agent_profile_fetched(store, agent_name=name, observed_at=observed_at, status="no_agent_obj", dry_run=args.dry_run)
                     continue
 
                 owner = pick_owner(agent_obj)
                 if not owner:
                     skipped_no_owner += 1
+                    mark_agent_profile_fetched(store, agent_name=name, observed_at=observed_at, status="no_owner", dry_run=args.dry_run)
                     continue
 
                 handle = clean_handle(owner.get("x_handle") or owner.get("xHandle"))
                 if not handle:
                     skipped_no_handle += 1
+                    mark_agent_profile_fetched(store, agent_name=name, observed_at=observed_at, status="no_x_handle", dry_run=args.dry_run)
                     continue
 
                 upsert_owner_link(

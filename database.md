@@ -1,5 +1,13 @@
 # Neo4j Specific Database Queries
 
+## Check Neo4j version
+
+```shell
+$ VER=$(docker exec moltbook-neo4j neo4j --version | awk '{print $NF}')
+$ echo $VER
+5.26.16
+```
+
 ## Check Database Size
 
 ```shell
@@ -43,7 +51,64 @@ docker run --rm -it \
 docker start moltbook-neo4j
 ```
 
+- If doesn't work due to permission issue:
+
+```shell
+# 1) Get the exact Neo4j version running in your container
+VER=$(docker exec moltbook-neo4j neo4j --version | awk '{print $NF}')
+
+# 2) Make a local folder for dump files
+mkdir -p "$HOME/neo4j_backups"
+
+# 3) Stop the running Neo4j container (required for Community/offline dump)
+docker stop moltbook-neo4j
+
+# 4) create /data/neo4j.dump inside the Neo4j data volume
+docker run --rm -it \
+  --user=0:0 \
+  -v moltbook_neo4j_data:/data \
+  neo4j:${VER}-community \
+  sh -c 'neo4j-admin database dump neo4j --to-path=/data --overwrite-destination=true && ls -lh /data/*.dump'
+
+# 5) Copy it out to your current directory
+docker create --name neo4j-dump-copy -v moltbook_neo4j_data:/data alpine true
+docker cp neo4j-dump-copy:/data/neo4j.dump ./neo4j.dump
+docker rm neo4j-dump-copy
+ls -lh ./neo4j.dump
+
+# 6) Copy out the system database
+docker run --rm -it \
+  --user=0:0 \
+  -v moltbook_neo4j_data:/data \
+  neo4j:${VER}-community \
+  sh -c 'neo4j-admin database dump system --to-path=/data --overwrite-destination=true && ls -lh /data/system.dump'
+
+docker create --name neo4j-dump-copy -v moltbook_neo4j_data:/data alpine true
+docker cp neo4j-dump-copy:/data/system.dump ./system.dump
+docker rm neo4j-dump-copy
+
+docker start moltbook-neo4j
+```
+
 - Backup location: `$HOME/neo4j_backups/neo4j.dump` and `$HOME/neo4j_backups/system.dump`
+
+- To restore
+
+```shell
+docker stop moltbook-neo4j
+
+docker run --rm -it \
+  --user=0:0 \
+  -v moltbook_neo4j_data:/data \
+  -v "$PWD:/backups:Z" \
+  neo4j:${VER}-community \
+  sh -c '
+    neo4j-admin database load system --from-path=/backups --overwrite-destination=true &&
+    neo4j-admin database load neo4j --from-path=/backups --overwrite-destination=true
+  '
+
+docker start moltbook-neo4j
+```
 
 ## Apply Schema Updates (without wiping volumes)
 

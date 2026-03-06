@@ -1,6 +1,6 @@
 # MoltGraph: Moltbook Social Network Graph
 
-We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in Neo4j. Read the graph schema [here](graph-schema.md), the database specific example queries [here](database.md), and database maintaining script is available [here](db-maintaining.md). Full dataset ia available in [HuggingFace](https://huggingface.co/datasets/kunmukh/MoltGraph).
+We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in Neo4j. Read the graph schema [here](graph-schema.md), the database specific example queries [here](database.md), and database maintaining script is available [here](db-maintaining.md). Full dataset ia available in [HuggingFace](https://huggingface.co/datasets/kunmukh/MoltGraph) and paper is available in [arXiv](https://arxiv.org/pdf/2603.00646).
 
 
 It supports:
@@ -200,9 +200,22 @@ LIMIT 5;
 4. Push to the branch
 5. Create a Pull Request
 
+## Cite Paper
+
+If you use this crawler in your work, please cite the paper.
+
+```bibtex
+@article{mukherjee2026moltgraph,
+  title={MoltGraph: A Longitudinal Temporal Graph Dataset of Moltbook for Coordinated-Agent Detection},
+  author={Mukherjee, Kunal and Akcora, Cuneyt Gurcan and Kantarcioglu, Murat},
+  journal={arXiv preprint arXiv:2603.00646},
+  year={2026}
+}
+```
+
 ## Cite This Repo
 
-If you use this crawler in academic work, please cite it.
+If you use this crawler in your work, please cite it.
 
 ```bibtex
 @software{mukherjee_moltbook_neo4j_crawler_2026,
@@ -214,6 +227,9 @@ If you use this crawler in academic work, please cite it.
   note         = {GitHub repository},
   url          = {\url{https://github.com/kunmukh/moltgraph}}
 }
+```
+
+
 ```
 
 ## Acknowledgment  

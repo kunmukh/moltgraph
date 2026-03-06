@@ -1,6 +1,6 @@
 # MoltGraph: Moltbook Social Network Graph
 
-We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in Neo4j. Read the graph schema [here](graph-schema.md), the database specific example queries [here](database.md), and database maintaining script is available [here](db-maintaining.md). Full dataset ia available in [HuggingFace](https://huggingface.co/datasets/kunmukh/MoltGraph) and paper is available in [arXiv](https://arxiv.org/pdf/2603.00646).
+We provide a **Neo4j** crawls the Moltbook network (agents, submolts, posts, comments, and feed snapshots) and stores it as a temporal graph in Neo4j. Read the graph schema [here](graph-schema.md), the database specific example queries [here](database.md), and database maintaining script is available [here](db-maintaining.md). Full dataset is available in [HuggingFace](https://huggingface.co/datasets/kunmukh/MoltGraph) and research paper is available in [arXiv](https://arxiv.org/pdf/2603.00646).
 
 
 It supports:

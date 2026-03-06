@@ -230,8 +230,6 @@ If you use this crawler in your work, please cite it.
 ```
 
 
-```
-
 ## Acknowledgment  
 
 Acknowledging the efforts of @[giordano-demarzo](https://github.com/giordano-demarzo) for creating [moltbook-api-crawler](https://github.com/giordano-demarzo/moltbook-api-crawler/tree/main?tab=readme-ov-file).

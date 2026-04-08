@@ -207,7 +207,7 @@ If you use this crawler in your work, please cite the paper.
 ```bibtex
 @article{mukherjee2026moltgraph,
   title={MoltGraph: A Longitudinal Temporal Graph Dataset of Moltbook for Coordinated-Agent Detection},
-  author={Mukherjee, Kunal and Akcora, Cuneyt Gurcan and Kantarcioglu, Murat},
+  author={XXXX},
   journal={arXiv preprint arXiv:2603.00646},
   year={2026}
 }

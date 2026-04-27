@@ -205,11 +205,13 @@ LIMIT 5;
 If you use this crawler in your work, please cite the paper.
 
 ```bibtex
-@article{mukherjee2026moltgraph,
+@inproceedings{mukherjee2026moltgraph,
   title={MoltGraph: A Longitudinal Temporal Graph Dataset of Moltbook for Coordinated-Agent Detection},
-  author={XXXX},
-  journal={arXiv preprint arXiv:2603.00646},
-  year={2026}
+  author={Mukherjee, Kunal and Akcora, Cuneyt and Kantarcioglu, Murat},
+  booktitle={Proceedings of the 1st ACM Conference on AI and Agentic Systems (ACM CAIS 2026)},
+  year={2026},
+  publisher={Association for Computing Machinery},
+  address={San Jose, California, USA}
 }
 ```
 
